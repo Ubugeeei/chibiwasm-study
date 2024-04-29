@@ -1,5 +1,5 @@
 use super::{
-    store::{InternalFuncInst, Store},
+    store::{FuncInst, InternalFuncInst, Store},
     value::Value,
 };
 use crate::binary::{instruction::Instruction, module::Module, types::ValueType};
@@ -29,6 +29,19 @@ impl Runtime {
             store,
             ..Default::default()
         })
+    }
+
+    pub fn call(&mut self, idx: usize, args: Vec<Value>) -> Result<Option<Value>> {
+        let Some(func_inst) = self.store.funcs.get(idx) else { // 1
+            bail!("not found func")
+        };
+        for arg in args {
+            // 2
+            self.stack.push(arg);
+        }
+        match func_inst {
+            FuncInst::Internal(func) => self.invoke_internal(func.clone()), // 3
+        }
     }
 
     fn invoke_internal(&mut self, func: InternalFuncInst) -> Result<Option<Value>> {
@@ -123,4 +136,25 @@ pub fn stack_unwind(stack: &mut Vec<Value>, sp: usize, arity: usize) -> Result<(
         stack.drain(sp..);
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Runtime;
+    use crate::execution::value::Value;
+    use anyhow::Result;
+
+    #[test]
+    fn execute_i32_add() -> Result<()> {
+        let wasm = wat::parse_file("src/fixtures/func_add.wat")?;
+        let mut runtime = Runtime::instantiate(wasm)?;
+        let tests = vec![(2, 3, 5), (10, 5, 15), (1, 1, 2)];
+
+        for (left, right, want) in tests {
+            let args = vec![Value::I32(left), Value::I32(right)];
+            let result = runtime.call(0, args)?;
+            assert_eq!(result, Some(Value::I32(want)));
+        }
+        Ok(())
+    }
 }
