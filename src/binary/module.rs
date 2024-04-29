@@ -2,6 +2,7 @@
 
 use super::{
     instruction::Instruction,
+    opcode::Opcode,
     section::{Function, SectionCode},
     types::{FuncType, FunctionLocal, ValueType},
 };
@@ -170,10 +171,31 @@ fn decode_function_body(input: &[u8]) -> IResult<&[u8], Function> {
         input = rest;
     }
 
-    // TODO: decode instructions
-    body.code = vec![Instruction::End];
+    let mut remaining = input;
+    while !remaining.is_empty() {
+        // 5
+        let (rest, inst) = decode_instructions(remaining)?;
+        body.code.push(inst);
+        remaining = rest;
+    }
 
     Ok((&[], body))
+}
+
+fn decode_instructions(input: &[u8]) -> IResult<&[u8], Instruction> {
+    let (input, byte) = le_u8(input)?;
+    let op = Opcode::from_u8(byte).unwrap_or_else(|| panic!("invalid opcode: {:X}", byte)); // 5-1
+    let (rest, inst) = match op {
+        // 5-2
+        Opcode::LocalGet => {
+            // 5-2-1
+            let (rest, idx) = leb128_u32(input)?;
+            (rest, Instruction::LocalGet(idx))
+        }
+        Opcode::I32Add => (input, Instruction::I32Add), // 5-2-2
+        Opcode::End => (input, Instruction::End),       // 5-2-2
+    };
+    Ok((rest, inst))
 }
 
 #[cfg(test)]
@@ -256,6 +278,33 @@ mod tests {
                         },
                     ],
                     code: vec![Instruction::End],
+                }]),
+                ..Default::default()
+            }
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn decode_func_add() -> Result<()> {
+        let wasm = wat::parse_file("src/fixtures/func_add.wat")?;
+        let module = Module::new(&wasm)?;
+        assert_eq!(
+            module,
+            Module {
+                type_section: Some(vec![FuncType {
+                    params: vec![ValueType::I32, ValueType::I32],
+                    results: vec![ValueType::I32],
+                }]),
+                function_section: Some(vec![0]),
+                code_section: Some(vec![Function {
+                    locals: vec![],
+                    code: vec![
+                        Instruction::LocalGet(0),
+                        Instruction::LocalGet(1),
+                        Instruction::I32Add,
+                        Instruction::End
+                    ],
                 }]),
                 ..Default::default()
             }
