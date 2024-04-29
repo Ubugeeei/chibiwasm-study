@@ -1,5 +1,5 @@
-mod instruction;
-mod module;
-mod opcode;
-mod section;
-mod types;
+pub mod instruction;
+pub mod module;
+pub mod opcode;
+pub mod section;
+pub mod types;
