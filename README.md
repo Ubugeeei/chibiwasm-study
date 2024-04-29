@@ -10,3 +10,4 @@ Thanks: [@skanehira](https://github.com/skanehira)
 
 - https://zenn.dev/skanehira/books/writing-wasm-runtime-in-rust
 - https://github.com/skanehira/chibiwasm
+- https://github.com/skanehira/tiny-wasm-runtime
