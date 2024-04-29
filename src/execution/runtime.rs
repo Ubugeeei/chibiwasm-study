@@ -36,7 +36,6 @@ impl Runtime {
             bail!("not found func")
         };
         for arg in args {
-            // 2
             self.stack.push(arg);
         }
         match func_inst {
