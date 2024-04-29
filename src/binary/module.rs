@@ -1,7 +1,9 @@
+#![allow(dead_code)]
+
 use super::{
     instruction::Instruction,
     section::{Function, SectionCode},
-    types::{FuncType, ValueType},
+    types::{FuncType, FunctionLocal, ValueType},
 };
 use nom::{
     bytes::complete::{tag, take},
@@ -138,14 +140,40 @@ fn decode_function_section(input: &[u8]) -> IResult<&[u8], Vec<u32>> {
     Ok((&[], func_idx_list))
 }
 
-fn decode_code_section(_input: &[u8]) -> IResult<&[u8], Vec<Function>> {
-    // TODO: decode locals and instructions
-    let functions = vec![Function {
-        locals: vec![],
-        code: vec![Instruction::End],
-    }];
+fn decode_code_section(input: &[u8]) -> IResult<&[u8], Vec<Function>> {
+    let mut functions = vec![];
+    let (mut input, count) = leb128_u32(input)?;
+
+    for _ in 0..count {
+        let (rest, size) = leb128_u32(input)?;
+        let (rest, body) = take(size)(rest)?;
+        let (_, body) = decode_function_body(body)?;
+        functions.push(body);
+        input = rest;
+    }
 
     Ok((&[], functions))
+}
+
+fn decode_function_body(input: &[u8]) -> IResult<&[u8], Function> {
+    let mut body = Function::default();
+
+    let (mut input, count) = leb128_u32(input)?;
+
+    for _ in 0..count {
+        let (rest, type_count) = leb128_u32(input)?;
+        let (rest, value_type) = le_u8(rest)?;
+        body.locals.push(FunctionLocal {
+            type_count,
+            value_type: value_type.into(),
+        });
+        input = rest;
+    }
+
+    // TODO: decode instructions
+    body.code = vec![Instruction::End];
+
+    Ok((&[], body))
 }
 
 #[cfg(test)]
@@ -154,7 +182,7 @@ mod tests {
         instruction::Instruction,
         module::Module,
         section::Function,
-        types::{FuncType, ValueType},
+        types::{FuncType, FunctionLocal, ValueType},
     };
     use anyhow::Result;
 
@@ -199,6 +227,34 @@ mod tests {
                 function_section: Some(vec![0]),
                 code_section: Some(vec![Function {
                     locals: vec![],
+                    code: vec![Instruction::End],
+                }]),
+                ..Default::default()
+            }
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn decode_func_local() -> Result<()> {
+        let wasm = wat::parse_file("src/fixtures/func_local.wat")?;
+        let module = Module::new(&wasm)?;
+        assert_eq!(
+            module,
+            Module {
+                type_section: Some(vec![FuncType::default()]),
+                function_section: Some(vec![0]),
+                code_section: Some(vec![Function {
+                    locals: vec![
+                        FunctionLocal {
+                            type_count: 1,
+                            value_type: ValueType::I32,
+                        },
+                        FunctionLocal {
+                            type_count: 2,
+                            value_type: ValueType::I64,
+                        },
+                    ],
                     code: vec![Instruction::End],
                 }]),
                 ..Default::default()
