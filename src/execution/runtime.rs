@@ -128,6 +128,7 @@ impl Runtime {
                     let result = left + right;
                     self.stack.push(result);
                 }
+                _ => todo!(),
             }
         }
         Ok(())
